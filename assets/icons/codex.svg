@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="codexBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#182721"/>
+      <stop offset="100%" stop-color="#0c1511"/>
+    </linearGradient>
+    <linearGradient id="codexGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10a37f"/>
+      <stop offset="100%" stop-color="#1cd4a7"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#codexBg)" stroke="#10a37f" stroke-width="3"/>
+  <!-- Codex Code Bracket & Terminal Symbol -->
+  <path d="M 36 44 L 20 64 L 36 84 M 92 44 L 108 64 L 92 84 M 70 38 L 58 90" fill="none" stroke="url(#codexGrad)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
