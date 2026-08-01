@@ -38,6 +38,12 @@ class LauncherConfig:
         sanitized = re.sub(r"-+", "-", sanitized).strip("-")
         return sanitized or "ai-launcher"
 
+    @property
+    def wm_class(self) -> str:
+        """WM_CLASS identifier for window manager taskbar association."""
+        return f"ai-{self.model_id}"
+
+
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary representation."""

@@ -68,10 +68,13 @@ class DesktopEntryGenerator:
         if categories_str and not categories_str.endswith(";"):
             categories_str += ";"
 
-        terminal_str = "true" if config.terminal else "false"
+        wm_class = config.wm_class
 
-        # Main launch command: konsole -e <binary_command>
-        exec_cmd = f"konsole -e {config.binary_command}" if not config.binary_command.startswith("konsole ") else config.binary_command
+        # Main launch command: konsole --class <wm_class> -e <binary_command>
+        if not config.binary_command.startswith("konsole "):
+            exec_cmd = f"konsole --class {wm_class} -e {config.binary_command}"
+        else:
+            exec_cmd = config.binary_command
 
         lines = [
             "[Desktop Entry]",
@@ -80,7 +83,8 @@ class DesktopEntryGenerator:
             f"Comment={config.comment}",
             f"Exec={exec_cmd}",
             f"Icon={config.icon}",
-            f"Terminal={terminal_str}",
+            "Terminal=false",
+            f"StartupWMClass={wm_class}",
             f"Categories={categories_str}",
             "Keywords=AI;LLM;CLI;KDE;Terminal;Claude;Antigravity;Codex;Konsole;Grid;Tabs;",
             "StartupNotify=true",
@@ -89,17 +93,17 @@ class DesktopEntryGenerator:
             "",
             "[Desktop Action Split4]",
             "Name=Launch 4-Pane Split Grid",
-            f"Exec=konsole --layout {split_json_path}",
+            f"Exec=konsole --class {wm_class} --layout {split_json_path}",
             "Icon=view-grid",
             "",
             "[Desktop Action Tabs4]",
             "Name=Launch 4-Tab Session",
-            f"Exec=konsole --tabs-from-file {tabs_file_path}",
+            f"Exec=konsole --class {wm_class} --tabs-from-file {tabs_file_path}",
             "Icon=tab-duplicate",
         ]
 
         if config.konsole_profile:
-            lines.insert(11, f"X-KDE-KonsoleProfile={config.konsole_profile}")
+            lines.insert(13, f"X-KDE-KonsoleProfile={config.konsole_profile}")
 
         return "\n".join(lines) + "\n"
 

@@ -10,21 +10,22 @@ def test_launcher_config_defaults():
     config = LauncherConfig(model_name="Claude", binary_command="claude")
     assert config.desktop_filename == "ai-claude.desktop"
     assert config.model_id == "claude"
+    assert config.wm_class == "ai-claude"
     assert config.icon == "utilities-terminal"
-    assert config.terminal is True
 
 
 def test_target_models_config():
     models = [
-        ("Claude", "claude", "ai-claude.desktop"),
-        ("Antigravity", "antigravity", "ai-antigravity.desktop"),
-        ("Codex", "codex", "ai-codex.desktop"),
+        ("Claude", "claude", "ai-claude.desktop", "ai-claude"),
+        ("Antigravity", "antigravity", "ai-antigravity.desktop", "ai-antigravity"),
+        ("Codex", "codex", "ai-codex.desktop", "ai-codex"),
     ]
-    for name, cmd, expected_file in models:
+    for name, cmd, expected_file, expected_wmclass in models:
         cfg = LauncherConfig(model_name=name, binary_command=cmd)
         assert cfg.model_name == name
         assert cfg.binary_command == cmd
         assert cfg.desktop_filename == expected_file
+        assert cfg.wm_class == expected_wmclass
 
 
 def test_split_layout_generation():
@@ -51,7 +52,7 @@ def test_tab_layout_generation():
     assert "title: Session 4 ;; command: antigravity" in lines[3]
 
 
-def test_desktop_entry_with_actions():
+def test_desktop_entry_with_actions_and_wmclass():
     config = LauncherConfig(
         model_name="Codex",
         binary_command="codex",
@@ -63,12 +64,14 @@ def test_desktop_entry_with_actions():
 
     assert "[Desktop Entry]" in content
     assert "Name=Codex" in content
-    assert "Exec=konsole -e codex" in content
+    assert "Exec=konsole --class ai-codex -e codex" in content
     assert "Icon=codex.svg" in content
+    assert "Terminal=false" in content
+    assert "StartupWMClass=ai-codex" in content
     assert "Actions=Split4;Tabs4;" in content
 
-    # Check Desktop Actions
+    # Check Desktop Actions with --class parameter
     assert "[Desktop Action Split4]" in content
-    assert "Exec=konsole --layout /home/user/.config/konsole/codex-4split.json" in content
+    assert "Exec=konsole --class ai-codex --layout /home/user/.config/konsole/codex-4split.json" in content
     assert "[Desktop Action Tabs4]" in content
-    assert "Exec=konsole --tabs-from-file /home/user/.config/konsole/codex-4tabs.tabs" in content
+    assert "Exec=konsole --class ai-codex --tabs-from-file /home/user/.config/konsole/codex-4tabs.tabs" in content
