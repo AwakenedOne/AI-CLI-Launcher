@@ -1,6 +1,7 @@
 """Core logic for building KDE Plasma desktop entries, Konsole layouts, and Desktop Actions."""
 
 import json
+import os
 from pathlib import Path
 from typing import Optional, Dict, Any
 from .config import LauncherConfig
@@ -49,17 +50,24 @@ class DesktopEntryGenerator:
     def generate_desktop_entry(
         config: LauncherConfig,
         konsole_dir: Optional[Path] = None,
+        icons_dir: Optional[Path] = None,
     ) -> str:
         """Build a complete Freedesktop .desktop specification with KDE Desktop Actions (Split4 and Tabs4).
 
         Args:
             config: LauncherConfig instance.
             konsole_dir: Target Konsole configuration directory. Defaults to ~/.config/konsole with expanded $HOME.
+            icons_dir: Target icon directory. Defaults to ~/.local/share/icons with expanded $HOME.
         """
         if konsole_dir is None:
             konsole_dir = Path.home() / ".config/konsole"
         else:
             konsole_dir = konsole_dir.expanduser()
+
+        if icons_dir is None:
+            icons_dir = Path.home() / ".local/share/icons"
+        else:
+            icons_dir = icons_dir.expanduser()
 
         split_json_path = konsole_dir / f"{config.model_id}-4split.json"
         tabs_file_path = konsole_dir / f"{config.model_id}-4tabs.tabs"
@@ -76,13 +84,26 @@ class DesktopEntryGenerator:
         else:
             exec_cmd = config.binary_command
 
+        # Resolve absolute path for Icon= key
+        icon_str = config.icon
+        expanded_icon = Path(icon_str).expanduser()
+
+        if expanded_icon.is_file():
+            icon_str = str(expanded_icon.resolve())
+        elif (icons_dir / icon_str).is_file():
+            icon_str = str((icons_dir / icon_str).resolve())
+        elif (icons_dir / f"{icon_str}.svg").is_file():
+            icon_str = str((icons_dir / f"{icon_str}.svg").resolve())
+        elif (icons_dir / f"{config.model_id}.svg").is_file():
+            icon_str = str((icons_dir / f"{config.model_id}.svg").resolve())
+
         lines = [
             "[Desktop Entry]",
             "Type=Application",
             f"Name={config.model_name}",
             f"Comment={config.comment}",
             f"Exec={exec_cmd}",
-            f"Icon={config.icon}",
+            f"Icon={icon_str}",
             "Terminal=false",
             f"StartupWMClass={wm_class}",
             f"Categories={categories_str}",

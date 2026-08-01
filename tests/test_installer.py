@@ -1,6 +1,8 @@
 """Tests for LauncherInstaller."""
 
 import json
+import os
+import stat
 from pathlib import Path
 import tempfile
 from kde_ai_launcher.config import LauncherConfig
@@ -14,11 +16,16 @@ def test_installer_file_creation():
         konsole_dir = tmp_path / "konsole"
         icons_dir = tmp_path / "icons"
 
+        # Create dummy icon file
+        custom_icon = tmp_path / "custom.svg"
+        custom_icon.write_text("<svg></svg>", encoding="utf-8")
+
         installer = LauncherInstaller(apps_dir=apps_dir, konsole_dir=konsole_dir, icons_dir=icons_dir)
 
         config = LauncherConfig(
             model_name="Test LLM",
             binary_command="python3 --version",
+            icon=str(custom_icon),
             desktop_filename="ai-test-llm.desktop",
         )
 
@@ -42,6 +49,15 @@ def test_installer_file_creation():
 
         assert "profile" in installed_files
         assert installed_files["profile"].exists()
+
+        assert "icon" in installed_files
+        assert installed_files["icon"].exists()
+        mode = installed_files["icon"].stat().st_mode
+        assert stat.S_IMODE(mode) == 0o644
+
+        # Desktop file should use absolute icon path
+        desktop_content = installed_files["desktop"].read_text(encoding="utf-8")
+        assert f"Icon={installed_files['icon'].resolve()}" in desktop_content
 
 
 def test_installer_binary_check():

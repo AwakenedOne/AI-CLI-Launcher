@@ -32,17 +32,22 @@ class LauncherInstaller:
         self.icons_dir = (icons_dir or self.DEFAULT_ICONS_DIR).expanduser()
 
     def copy_bundled_icons(self) -> List[Path]:
-        """Copy all bundled SVG icon files from assets/icons/ to the system icon directory."""
+        """Copy all bundled SVG icon files from assets/icons/ to the system icon directory with 644 permissions."""
         copied: List[Path] = []
-        if ASSETS_ICONS_DIR.exists():
-            try:
-                self.icons_dir.mkdir(parents=True, exist_ok=True)
-                for svg_file in ASSETS_ICONS_DIR.glob("*.svg"):
-                    target_path = self.icons_dir / svg_file.name
-                    shutil.copy2(svg_file, target_path)
-                    copied.append(target_path)
-            except OSError as e:
-                print(f"[!] Warning: Failed to copy bundled icons: {e}", file=sys.stderr)
+        if not ASSETS_ICONS_DIR.exists() or not list(ASSETS_ICONS_DIR.glob("*.svg")):
+            print(f"[!] Warning: Bundled icon directory '{ASSETS_ICONS_DIR}' or SVG assets missing.", file=sys.stderr)
+            return copied
+
+        try:
+            self.icons_dir.mkdir(parents=True, exist_ok=True)
+            for svg_file in ASSETS_ICONS_DIR.glob("*.svg"):
+                target_path = self.icons_dir / svg_file.name
+                shutil.copy2(svg_file, target_path)
+                os.chmod(target_path, 0o644)
+                copied.append(target_path)
+        except OSError as e:
+            print(f"[!] Warning: Failed to copy bundled icons: {e}", file=sys.stderr)
+
         return copied
 
     def uninstall(self, configs: Optional[List[LauncherConfig]] = None) -> List[Path]:
@@ -184,15 +189,22 @@ class LauncherInstaller:
                     self.icons_dir.mkdir(parents=True, exist_ok=True)
                     target_icon_path = self.icons_dir / icon_path.name
                     shutil.copy2(icon_path, target_icon_path)
+                    os.chmod(target_icon_path, 0o644)
                     installed_files["icon"] = target_icon_path
-                    # Use file path for icon assignment
-                    config.icon = str(target_icon_path)
+                    # Use absolute path for icon assignment
+                    config.icon = str(target_icon_path.resolve())
                 except OSError as e:
                     print(f"[!] Warning: Could not copy icon file: {e}", file=sys.stderr)
+            elif not ASSETS_ICONS_DIR.exists():
+                print(f"[!] Warning: Bundled icon assets directory '{ASSETS_ICONS_DIR}' not found.", file=sys.stderr)
 
-            # 4. Generate & write .desktop entry referencing the layouts in Konsole Desktop Actions
+            # 4. Generate & write .desktop entry referencing the layouts in Konsole Desktop Actions and absolute icon path
             desktop_file_path = self.apps_dir / config.desktop_filename
-            desktop_content = DesktopEntryGenerator.generate_desktop_entry(config, konsole_dir=self.konsole_dir)
+            desktop_content = DesktopEntryGenerator.generate_desktop_entry(
+                config,
+                konsole_dir=self.konsole_dir,
+                icons_dir=self.icons_dir,
+            )
             desktop_file_path.write_text(desktop_content, encoding="utf-8")
             os.chmod(desktop_file_path, 0o755)
             installed_files["desktop"] = desktop_file_path
