@@ -1,4 +1,4 @@
-"""File installer and KDE desktop database refresh handler."""
+"""File installer and KDE desktop database refresh handler with strict file safety boundaries."""
 
 import os
 import shutil
@@ -13,13 +13,37 @@ ASSETS_ICONS_DIR = Path(__file__).resolve().parent.parent.parent / "assets" / "i
 if not ASSETS_ICONS_DIR.exists():
     ASSETS_ICONS_DIR = Path(__file__).resolve().parent / "assets" / "icons"
 
+# Explicit set of allowed desktop files to manage (NO WILDCARDS)
+ALLOWED_DESKTOP_FILES = {
+    "ai-claude.desktop",
+    "ai-antigravity.desktop",
+    "ai-codex.desktop",
+    "ai-launcher.desktop",
+}
+
+# Explicit set of allowed icon files to manage (NO WILDCARDS)
+ALLOWED_ICON_FILES = {
+    "ai-claude.svg",
+    "ai-antigravity.svg",
+    "ai-codex.svg",
+    "ai-launcher.svg",
+}
+
+# Explicit set of allowed model IDs to manage for Konsole layout files (NO WILDCARDS)
+ALLOWED_MODEL_IDS = {
+    "claude",
+    "antigravity",
+    "codex",
+    "launcher",
+}
+
 
 class LauncherInstaller:
-    """Installer responsible for writing launcher assets, layout files, and updating KDE system caches."""
+    """Installer responsible for writing launcher assets, layout files, and updating KDE system caches safely."""
 
     DEFAULT_APPS_DIR = Path.home() / ".local/share/applications"
     DEFAULT_KONSOLE_DIR = Path.home() / ".config/konsole"
-    DEFAULT_ICONS_DIR = Path.home() / ".local/share/icons"
+    DEFAULT_ICONS_DIR = Path.home() / ".local/share/icons/hicolor/scalable/apps"
 
     def __init__(
         self,
@@ -32,7 +56,7 @@ class LauncherInstaller:
         self.icons_dir = (icons_dir or self.DEFAULT_ICONS_DIR).expanduser()
 
     def copy_bundled_icons(self) -> List[Path]:
-        """Copy all bundled SVG icon files from assets/icons/ to the system icon directory with 644 permissions."""
+        """Copy all bundled SVG icon files to ~/.local/share/icons/hicolor/scalable/apps/ with 644 permissions."""
         copied: List[Path] = []
         if not ASSETS_ICONS_DIR.exists() or not list(ASSETS_ICONS_DIR.glob("*.svg")):
             print(f"[!] Warning: Bundled icon directory '{ASSETS_ICONS_DIR}' or SVG assets missing.", file=sys.stderr)
@@ -41,29 +65,33 @@ class LauncherInstaller:
         try:
             self.icons_dir.mkdir(parents=True, exist_ok=True)
             for svg_file in ASSETS_ICONS_DIR.glob("*.svg"):
-                target_path = self.icons_dir / svg_file.name
-                shutil.copy2(svg_file, target_path)
-                os.chmod(target_path, 0o644)
-                copied.append(target_path)
+                if svg_file.is_file() and svg_file.stat().st_size > 0:
+                    target_path = self.icons_dir / svg_file.name
+                    shutil.copy2(svg_file, target_path)
+                    os.chmod(target_path, 0o644)
+                    copied.append(target_path)
         except OSError as e:
             print(f"[!] Warning: Failed to copy bundled icons: {e}", file=sys.stderr)
 
         return copied
 
     def uninstall(self, configs: Optional[List[LauncherConfig]] = None) -> List[Path]:
-        """Safely remove all installed desktop entries, Konsole layout files, and model icons."""
+        """Safely remove ONLY explicitly allowed desktop entries, Konsole layout files, and model icons.
+
+        Uses STRICT exact file paths only. NEVER uses wildcards.
+        """
         removed_files: List[Path] = []
 
-        target_desktop_files = {"ai-claude.desktop", "ai-antigravity.desktop", "ai-codex.desktop", "ai-launcher.desktop"}
-        target_icon_files = {"claude.svg", "antigravity.svg", "codex.svg", "ai-launcher.svg"}
-        target_model_ids = {"claude", "antigravity", "codex"}
+        target_desktop_files = set(ALLOWED_DESKTOP_FILES)
+        target_icon_files = set(ALLOWED_ICON_FILES)
+        target_model_ids = set(ALLOWED_MODEL_IDS)
 
         if configs:
             for cfg in configs:
                 target_desktop_files.add(cfg.desktop_filename)
                 target_model_ids.add(cfg.model_id)
 
-        # 1. Remove desktop entries
+        # 1. Remove ONLY exact desktop entries (STRICT EQUALITY - NO WILDCARDS)
         if self.apps_dir.exists():
             for desktop_name in target_desktop_files:
                 desktop_path = self.apps_dir / desktop_name
@@ -74,17 +102,7 @@ class LauncherInstaller:
                     except OSError as e:
                         print(f"[!] Warning: Could not delete '{desktop_path}': {e}", file=sys.stderr)
 
-            for desktop_path in self.apps_dir.glob("ai-*.desktop"):
-                if desktop_path.exists() and desktop_path not in removed_files:
-                    try:
-                        content = desktop_path.read_text(encoding="utf-8", errors="ignore")
-                        if "Actions=Split4;Tabs4;" in content or "KDE AI Launcher" in content:
-                            desktop_path.unlink()
-                            removed_files.append(desktop_path)
-                    except OSError:
-                        pass
-
-        # 2. Remove Konsole layout files
+        # 2. Remove ONLY exact Konsole layout files (STRICT EQUALITY - NO WILDCARDS)
         if self.konsole_dir.exists():
             for model_id in target_model_ids:
                 split_file = self.konsole_dir / f"{model_id}-4split.json"
@@ -97,31 +115,18 @@ class LauncherInstaller:
                         except OSError as e:
                             print(f"[!] Warning: Could not delete '{target_file}': {e}", file=sys.stderr)
 
-            for split_file in self.konsole_dir.glob("*-4split.json"):
-                if split_file not in removed_files:
-                    try:
-                        split_file.unlink()
-                        removed_files.append(split_file)
-                    except OSError:
-                        pass
-            for tabs_file in self.konsole_dir.glob("*-4tabs.tabs"):
-                if tabs_file not in removed_files:
-                    try:
-                        tabs_file.unlink()
-                        removed_files.append(tabs_file)
-                    except OSError:
-                        pass
-
-        # 3. Remove icon files
-        if self.icons_dir.exists():
-            for icon_name in target_icon_files:
-                icon_path = self.icons_dir / icon_name
-                if icon_path.exists() and icon_path not in removed_files:
-                    try:
-                        icon_path.unlink()
-                        removed_files.append(icon_path)
-                    except OSError as e:
-                        print(f"[!] Warning: Could not delete '{icon_path}': {e}", file=sys.stderr)
+        # 3. Remove ONLY exact icon files from hicolor and legacy icons directory (STRICT EQUALITY - NO WILDCARDS)
+        icon_dirs_to_clean = [self.icons_dir, Path.home() / ".local/share/icons"]
+        for icon_dir in icon_dirs_to_clean:
+            if icon_dir.exists():
+                for icon_name in target_icon_files:
+                    icon_path = icon_dir / icon_name
+                    if icon_path.exists() and icon_path not in removed_files:
+                        try:
+                            icon_path.unlink()
+                            removed_files.append(icon_path)
+                        except OSError as e:
+                            print(f"[!] Warning: Could not delete '{icon_path}': {e}", file=sys.stderr)
 
         return removed_files
 
@@ -147,6 +152,7 @@ class LauncherInstaller:
         try:
             self.apps_dir.mkdir(parents=True, exist_ok=True)
             self.konsole_dir.mkdir(parents=True, exist_ok=True)
+            self.icons_dir.mkdir(parents=True, exist_ok=True)
         except OSError as e:
             print(f"[-] Error creating installation directories: {e}", file=sys.stderr)
             raise
@@ -164,7 +170,8 @@ class LauncherInstaller:
             tabs_path.write_text(tabs_content, encoding="utf-8")
             installed_files["tab_layout"] = tabs_path
 
-            # 3. Handle icon file copy if local file path or bundled icon specified
+            # 3. Copy icon file into ~/.local/share/icons/hicolor/scalable/apps/ using exact ai- prefixed name
+            target_icon_name = f"ai-{config.model_id}.svg"
             icon_setting = config.icon
             icon_path = None
             if icon_setting:
@@ -172,17 +179,19 @@ class LauncherInstaller:
                 if expanded.is_file():
                     icon_path = expanded
                 else:
-                    cand1 = ASSETS_ICONS_DIR / icon_setting
-                    cand2 = ASSETS_ICONS_DIR / f"{icon_setting}.svg"
+                    cand1 = ASSETS_ICONS_DIR / f"ai-{config.model_id}.svg"
+                    cand2 = ASSETS_ICONS_DIR / icon_setting
+                    cand3 = ASSETS_ICONS_DIR / f"{icon_setting}.svg"
                     if cand1.is_file():
                         icon_path = cand1
                     elif cand2.is_file():
                         icon_path = cand2
+                    elif cand3.is_file():
+                        icon_path = cand3
 
-            if icon_path and icon_path.is_file():
+            if icon_path and icon_path.is_file() and icon_path.stat().st_size > 0:
                 try:
-                    self.icons_dir.mkdir(parents=True, exist_ok=True)
-                    target_icon_path = self.icons_dir / icon_path.name
+                    target_icon_path = self.icons_dir / target_icon_name
                     shutil.copy2(icon_path, target_icon_path)
                     os.chmod(target_icon_path, 0o644)
                     installed_files["icon"] = target_icon_path
@@ -192,7 +201,7 @@ class LauncherInstaller:
             elif not ASSETS_ICONS_DIR.exists():
                 print(f"[!] Warning: Bundled icon assets directory '{ASSETS_ICONS_DIR}' not found.", file=sys.stderr)
 
-            # 4. Generate & write .desktop entry referencing the layouts in Konsole Desktop Actions
+            # 4. Generate & write .desktop entry referencing the layouts in Konsole Desktop Actions and absolute icon path
             desktop_file_path = self.apps_dir / config.desktop_filename
             desktop_content = DesktopEntryGenerator.generate_desktop_entry(
                 config,
@@ -219,8 +228,20 @@ class LauncherInstaller:
 
     @staticmethod
     def refresh_kde_cache() -> List[str]:
-        """Execute KDE Plasma / XDG cache update tools, prioritizing kbuildsycoca6 over kbuildsycoca5."""
+        """Execute GTK icon cache update & KDE Plasma sycoca cache update tools with robust error handling."""
         results = []
+
+        # 0. gtk-update-icon-cache (Freedesktop Hicolor Icon Cache Update)
+        hicolor_dir = str(Path.home() / ".local/share/icons/hicolor")
+        if shutil.which("gtk-update-icon-cache"):
+            try:
+                res = subprocess.run(["gtk-update-icon-cache", "-f", "-t", hicolor_dir], capture_output=True, text=True, timeout=10)
+                if res.returncode == 0:
+                    results.append(f"Successfully updated GTK icon cache in {hicolor_dir}.")
+                else:
+                    results.append(f"gtk-update-icon-cache output: {res.stderr.strip()}")
+            except Exception as e:
+                results.append(f"Failed to execute gtk-update-icon-cache: {e}")
 
         # 1. kbuildsycoca6 (KDE Plasma 6 - Primary)
         if shutil.which("kbuildsycoca6"):

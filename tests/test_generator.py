@@ -65,7 +65,8 @@ def test_desktop_entry_with_actions_and_wmclass():
     assert "[Desktop Entry]" in content
     assert "Name=Codex" in content
     assert "Exec=konsole --class ai-codex -e codex" in content
-    assert "Icon=codex.svg" in content
+    assert "Icon=" in content
+    assert "codex.svg" in content
     assert "Terminal=false" in content
     assert "StartupWMClass=ai-codex" in content
     assert "Actions=Split4;Tabs4;" in content

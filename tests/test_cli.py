@@ -21,25 +21,25 @@ def test_get_default_configs():
     assert claude.model_name == "Claude"
     assert claude.binary_command == "claude"
     assert claude.desktop_filename == "ai-claude.desktop"
-    assert "claude.svg" in claude.icon
+    assert "ai-claude.svg" in claude.icon
 
     antigravity = configs[1]
     assert antigravity.model_name == "Antigravity"
     assert antigravity.binary_command == "agy"
     assert antigravity.desktop_filename == "ai-antigravity.desktop"
-    assert "antigravity.svg" in antigravity.icon
+    assert "ai-antigravity.svg" in antigravity.icon
 
     codex = configs[2]
     assert codex.model_name == "Codex"
     assert codex.binary_command == "codex"
     assert codex.desktop_filename == "ai-codex.desktop"
-    assert "codex.svg" in codex.icon
+    assert "ai-codex.svg" in codex.icon
 
 
 def test_get_default_icon_for_model():
-    assert "claude.svg" in get_default_icon_for_model("claude")
-    assert "antigravity.svg" in get_default_icon_for_model("antigravity")
-    assert "codex.svg" in get_default_icon_for_model("codex")
+    assert "ai-claude.svg" in get_default_icon_for_model("claude")
+    assert "ai-antigravity.svg" in get_default_icon_for_model("antigravity")
+    assert "ai-codex.svg" in get_default_icon_for_model("codex")
     assert get_default_icon_for_model("unknown_model_xyz") == "utilities-terminal"
 
 
@@ -87,14 +87,14 @@ def test_installer_bundled_icon_copy():
         config = LauncherConfig(
             model_name="Claude",
             binary_command="claude",
-            icon="claude.svg",
+            icon="ai-claude.svg",
             desktop_filename="ai-claude.desktop",
         )
 
         installed = installer.install(config)
         assert "icon" in installed
         assert installed["icon"].exists()
-        assert installed["icon"].name == "claude.svg"
+        assert installed["icon"].name == "ai-claude.svg"
         assert config.icon == str(installed["icon"])
 
 
@@ -110,7 +110,7 @@ def test_installer_uninstall():
         config = LauncherConfig(
             model_name="Claude",
             binary_command="claude",
-            icon="claude.svg",
+            icon="ai-claude.svg",
             desktop_filename="ai-claude.desktop",
         )
 

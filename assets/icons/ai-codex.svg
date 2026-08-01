@@ -10,6 +10,5 @@
     </linearGradient>
   </defs>
   <rect width="128" height="128" rx="28" fill="url(#codexBg)" stroke="#10a37f" stroke-width="3"/>
-  <!-- Codex Code Bracket & Terminal Symbol -->
   <path d="M 36 44 L 20 64 L 36 84 M 92 44 L 108 64 L 92 84 M 70 38 L 58 90" fill="none" stroke="url(#codexGrad)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

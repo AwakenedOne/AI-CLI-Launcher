@@ -60,6 +60,39 @@ def test_installer_file_creation():
         assert f"Icon={installed_files['icon'].resolve()}" in desktop_content
 
 
+def test_installer_preserves_third_party_desktop_files():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        apps_dir = tmp_path / "applications"
+        konsole_dir = tmp_path / "konsole"
+        icons_dir = tmp_path / "icons"
+
+        apps_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create third-party application desktop entry (e.g. Antigravity IDE)
+        third_party_app = apps_dir / "antigravity.desktop"
+        third_party_app.write_text("[Desktop Entry]\nName=Antigravity IDE", encoding="utf-8")
+
+        installer = LauncherInstaller(apps_dir=apps_dir, konsole_dir=konsole_dir, icons_dir=icons_dir)
+
+        config = LauncherConfig(
+            model_name="Antigravity",
+            binary_command="agy",
+            desktop_filename="ai-antigravity.desktop",
+        )
+
+        installer.install(config)
+
+        # The third-party desktop file MUST remain intact
+        assert third_party_app.exists()
+        assert (apps_dir / "ai-antigravity.desktop").exists()
+
+        # Uninstall should also preserve third-party file
+        installer.uninstall([config])
+        assert third_party_app.exists()
+        assert not (apps_dir / "ai-antigravity.desktop").exists()
+
+
 def test_installer_binary_check():
     installer = LauncherInstaller()
     assert installer.check_binary_exists("python3") is True

@@ -11,7 +11,6 @@
     </linearGradient>
   </defs>
   <rect width="128" height="128" rx="28" fill="url(#antiBg)" stroke="#00e5ff" stroke-width="3"/>
-  <!-- Floating Antigravity Diamond / Atom Rings -->
   <g transform="translate(64, 64)">
     <ellipse rx="42" ry="16" fill="none" stroke="url(#antiGrad)" stroke-width="5" transform="rotate(-30)"/>
     <ellipse rx="42" ry="16" fill="none" stroke="url(#antiGrad)" stroke-width="5" transform="rotate(30)"/>

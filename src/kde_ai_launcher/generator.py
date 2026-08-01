@@ -57,7 +57,7 @@ class DesktopEntryGenerator:
         Args:
             config: LauncherConfig instance.
             konsole_dir: Target Konsole configuration directory. Defaults to ~/.config/konsole with expanded $HOME.
-            icons_dir: Target icon directory. Defaults to ~/.local/share/icons with expanded $HOME.
+            icons_dir: Target icon directory. Defaults to ~/.local/share/icons/hicolor/scalable/apps with expanded $HOME.
         """
         if konsole_dir is None:
             konsole_dir = Path.home() / ".config/konsole"
@@ -65,7 +65,7 @@ class DesktopEntryGenerator:
             konsole_dir = konsole_dir.expanduser()
 
         if icons_dir is None:
-            icons_dir = Path.home() / ".local/share/icons"
+            icons_dir = Path.home() / ".local/share/icons/hicolor/scalable/apps"
         else:
             icons_dir = icons_dir.expanduser()
 
@@ -84,18 +84,24 @@ class DesktopEntryGenerator:
         else:
             exec_cmd = config.binary_command
 
-        # Resolve absolute path for Icon= key
+        # Resolve absolute path for Icon= key with ai- prefix
+        target_ai_icon = f"ai-{config.model_id}.svg"
         icon_str = config.icon
         expanded_icon = Path(icon_str).expanduser()
 
         if expanded_icon.is_file():
             icon_str = str(expanded_icon.resolve())
+        elif (icons_dir / target_ai_icon).is_file():
+            icon_str = str((icons_dir / target_ai_icon).resolve())
         elif (icons_dir / icon_str).is_file():
             icon_str = str((icons_dir / icon_str).resolve())
         elif (icons_dir / f"{icon_str}.svg").is_file():
             icon_str = str((icons_dir / f"{icon_str}.svg").resolve())
-        elif (icons_dir / f"{config.model_id}.svg").is_file():
-            icon_str = str((icons_dir / f"{config.model_id}.svg").resolve())
+        elif (Path.home() / ".local/share/icons/hicolor/scalable/apps" / target_ai_icon).is_file():
+            icon_str = str((Path.home() / ".local/share/icons/hicolor/scalable/apps" / target_ai_icon).resolve())
+        else:
+            # Fallback to explicit absolute target hicolor path
+            icon_str = str((icons_dir / target_ai_icon).resolve())
 
         lines = [
             "[Desktop Entry]",

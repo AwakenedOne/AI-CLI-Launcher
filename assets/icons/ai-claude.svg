@@ -10,7 +10,6 @@
     </linearGradient>
   </defs>
   <rect width="128" height="128" rx="28" fill="url(#claudeBg)" stroke="#d97757" stroke-width="3"/>
-  <!-- Claude Asterisk / Spark Emblem -->
   <g transform="translate(64, 64)">
     <path d="M -8 -36 L 8 -36 L 6 -10 L 26 -26 L 36 -16 L 16 4 L 38 18 L 30 30 L 8 12 L -6 34 L -20 28 L -10 8 L -34 16 L -38 2 L -14 -6 L -32 -22 L -22 -32 L -6 -14 Z" fill="url(#claudeSpark)"/>
   </g>

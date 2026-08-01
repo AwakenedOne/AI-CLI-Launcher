@@ -22,9 +22,13 @@ DEFAULT_CONFIG_FILE = DEFAULT_CONFIG_DIR / "config.json"
 
 def get_default_icon_for_model(model_key: str) -> str:
     """Resolve default SVG icon path for target model (claude, antigravity, codex)."""
-    icon_file = ASSETS_ICONS_DIR / f"{model_key.lower()}.svg"
-    if icon_file.exists():
-        return str(icon_file)
+    key = model_key.lower()
+    cand1 = ASSETS_ICONS_DIR / f"ai-{key}.svg"
+    cand2 = ASSETS_ICONS_DIR / f"{key}.svg"
+    if cand1.exists():
+        return str(cand1)
+    elif cand2.exists():
+        return str(cand2)
     return "utilities-terminal"
 
 
