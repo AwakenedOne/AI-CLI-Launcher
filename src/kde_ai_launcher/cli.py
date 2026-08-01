@@ -12,6 +12,8 @@ from .installer import LauncherInstaller
 
 
 ASSETS_ICONS_DIR = Path(__file__).resolve().parent.parent.parent / "assets" / "icons"
+if not ASSETS_ICONS_DIR.exists():
+    ASSETS_ICONS_DIR = Path(__file__).resolve().parent / "assets" / "icons"
 
 
 def get_default_icon_for_model(model_key: str) -> str:
@@ -24,7 +26,7 @@ def get_default_icon_for_model(model_key: str) -> str:
 
 def prompt_user(text: str, default: str) -> str:
     """Prompt user for interactive input with default fallback."""
-    response = input(f"{text} [{default}]: ").strip()
+    response = input(f"{text} [default: {default}]: ").strip()
     return response if response else default
 
 
@@ -37,12 +39,12 @@ def prompt_icon_choice(model_key: str, default_option: str = "1") -> str:
     print(f"    [1] Dedicated model SVG icon ({svg_basename})")
     print("    [2] Standard system icon name (e.g., 'utilities-terminal', 'system-search')")
     print("    [3] Custom local file path (SVG/PNG)")
-    choice = input(f"  Choice [1-3] (default: {default_option}): ").strip() or default_option
+    choice = input(f"  Choice [1-3] [default: {default_option}]: ").strip() or default_option
 
     if choice == "1":
         return default_svg
     elif choice == "2":
-        icon_name = input("  Enter system icon name [utilities-terminal]: ").strip()
+        icon_name = input("  Enter system icon name [default: utilities-terminal]: ").strip()
         return icon_name if icon_name else "utilities-terminal"
     elif choice == "3":
         file_path = input("  Enter local icon file path: ").strip()
@@ -56,27 +58,51 @@ def prompt_icon_choice(model_key: str, default_option: str = "1") -> str:
         return default_svg
 
 
+def get_default_configs() -> List[LauncherConfig]:
+    """Generate default non-interactive configurations for Claude, Antigravity, and Codex."""
+    return [
+        LauncherConfig(
+            model_name="Claude",
+            binary_command="claude",
+            icon=get_default_icon_for_model("claude"),
+            desktop_filename="ai-claude.desktop",
+        ),
+        LauncherConfig(
+            model_name="Antigravity",
+            binary_command="agy",
+            icon=get_default_icon_for_model("antigravity"),
+            desktop_filename="ai-antigravity.desktop",
+        ),
+        LauncherConfig(
+            model_name="Codex",
+            binary_command="codex",
+            icon=get_default_icon_for_model("codex"),
+            desktop_filename="ai-codex.desktop",
+        ),
+    ]
+
+
 def interactive_wizard() -> List[LauncherConfig]:
     """Run interactive setup wizard to configure the 3 target AI models: Claude, Antigravity, and Codex."""
     print("=" * 72)
-    print("  KDE AI Launcher - Interactive Setup Wizard (Claude, Antigravity, Codex)")
+    print("  KDE AI Launcher - Advanced Interactive Wizard")
     print("  Targeting Ubuntu 24.04 LTS & KDE Plasma 6 Desktop Environment")
     print("=" * 72)
     print()
 
     target_models: List[Tuple[str, str, str, str]] = [
         ("Claude", "claude", "ai-claude.desktop", "claude"),
-        ("Antigravity", "antigravity", "ai-antigravity.desktop", "antigravity"),
+        ("Antigravity", "agy", "ai-antigravity.desktop", "antigravity"),
         ("Codex", "codex", "ai-codex.desktop", "codex"),
     ]
 
     configs: List[LauncherConfig] = []
 
     for idx, (def_name, def_cmd, def_file, key) in enumerate(target_models, start=1):
-        print(f"\n--- Model {idx} of 3 Configuration ({def_name}) ---")
-        model_name = prompt_user(f"Model {idx} Display Name", def_name)
-        base_command = prompt_user(f"Model {idx} Executable Command", def_cmd)
-        custom_args = input(f"Optional Flags/Arguments for {def_name} (e.g. --verbose or leave blank): ").strip()
+        print(f"\n--- Model #{idx}: {def_name} Configuration ---")
+        model_name = prompt_user("Model Display Name", def_name)
+        base_command = prompt_user("Executable command", def_cmd)
+        custom_args = input(f"Optional flags/arguments for {model_name} (leave blank for none): ").strip()
 
         if custom_args:
             full_command = f"{base_command} {custom_args}"
@@ -87,8 +113,17 @@ def interactive_wizard() -> List[LauncherConfig]:
         if first_word and not shutil.which(first_word):
             print(f"  [!] Note: Binary '{first_word}' was not found in system PATH. Launcher will still be created.")
 
-        icon = prompt_icon_choice(model_key=key, default_option="1")
-        desktop_file = prompt_user(f"Target Desktop Filename", def_file)
+        desktop_file = prompt_user("Desktop filename", def_file)
+        if not desktop_file.endswith(".desktop"):
+            desktop_file = f"{desktop_file}.desktop"
+
+        default_icon = get_default_icon_for_model(key)
+        svg_name = Path(default_icon).name
+        change_icon = input(f"Custom icon? (default: bundled {svg_name}) [y/N]: ").strip().lower()
+        if change_icon in ("y", "yes"):
+            icon = prompt_icon_choice(model_key=key, default_option="1")
+        else:
+            icon = default_icon
 
         config = LauncherConfig(
             model_name=model_name,
@@ -98,8 +133,13 @@ def interactive_wizard() -> List[LauncherConfig]:
         )
         configs.append(config)
 
+    return configs
+
+
+def print_summary(configs: List[LauncherConfig], title: str = "Generated Configurations Summary") -> None:
+    """Print clean, friendly summary output of launcher configurations."""
     print("\n" + "=" * 72)
-    print("  Generated Configurations Summary:")
+    print(f"  {title}:")
     print("=" * 72)
     for idx, cfg in enumerate(configs, start=1):
         print(f"\nModel #{idx}: {cfg.model_name}")
@@ -107,21 +147,20 @@ def interactive_wizard() -> List[LauncherConfig]:
         print(f"  Icon:         {cfg.icon}")
         print(f"  Desktop File: {cfg.desktop_filename}")
 
-    return configs
-
 
 def main(args: Optional[list] = None) -> int:
     """Main CLI entry point for kde-ai-launcher."""
     parser = argparse.ArgumentParser(
         prog="kde-ai-launcher",
-        description="Scaffold and install KDE Plasma 6 desktop launchers for Claude, Antigravity, and Codex CLI tools.",
+        description="Scaffold and install KDE Plasma desktop launchers for Claude, Antigravity, and Codex CLI tools.",
     )
     subparsers = parser.add_subparsers(dest="command", help="Available subcommands")
 
     # Command: generate
-    gen_parser = subparsers.add_parser("generate", help="Run interactive wizard to configure Claude, Antigravity, and Codex.")
+    gen_parser = subparsers.add_parser("generate", help="Build KDE desktop launchers for Claude, Antigravity, and Codex.")
+    gen_parser.add_argument("--advanced", "-a", action="store_true", help="Run interactive prompt for custom model settings.")
     gen_parser.add_argument("--out-dir", "-o", type=str, help="Export generated JSON configs to directory.")
-    gen_parser.add_argument("--install", "-i", action="store_true", help="Install desktop entries immediately after wizard.")
+    gen_parser.add_argument("--install", "-i", action="store_true", help="Install desktop entries immediately.")
 
     # Command: install
     inst_parser = subparsers.add_parser("install", help="Install desktop application entry and KDE profiles.")
@@ -132,6 +171,10 @@ def main(args: Optional[list] = None) -> int:
     inst_parser.add_argument("--desktop-file", "-f", type=str, help="Target desktop filename")
     inst_parser.add_argument("--konsole-profile", action="store_true", help="Also generate and install KDE Konsole profile")
 
+    # Command: uninstall
+    uninst_parser = subparsers.add_parser("uninstall", help="Uninstall and remove all generated KDE desktop shortcuts, layout files, and icons.")
+    uninst_parser.add_argument("--yes", "-y", action="store_true", help="Skip confirmation prompt.")
+
     parsed_args = parser.parse_args(args)
 
     if not parsed_args.command:
@@ -139,7 +182,17 @@ def main(args: Optional[list] = None) -> int:
         return 0
 
     if parsed_args.command == "generate":
-        configs = interactive_wizard()
+        if parsed_args.advanced:
+            configs = interactive_wizard()
+            print_summary(configs, "Advanced Configurations Summary")
+            should_install = parsed_args.install or input("\nInstall all 3 launchers (Claude, Antigravity, Codex) now? [Y/n]: ").strip().lower() in ("", "y", "yes")
+        else:
+            print("=" * 72)
+            print("  KDE AI Launcher - Zero-Config Setup (Claude, Antigravity, Codex)")
+            print("=" * 72)
+            configs = get_default_configs()
+            print_summary(configs, "Generated Configurations Summary")
+            should_install = True
 
         if parsed_args.out_dir:
             out_dir = Path(parsed_args.out_dir).expanduser()
@@ -149,7 +202,7 @@ def main(args: Optional[list] = None) -> int:
                 out_path.write_text(cfg.to_json(), encoding="utf-8")
                 print(f"[+] Saved JSON config to: {out_path.resolve()}")
 
-        if parsed_args.install or input("\nInstall all 3 launchers (Claude, Antigravity, Codex) now? [Y/n]: ").strip().lower() in ("", "y", "yes"):
+        if should_install:
             installer = LauncherInstaller()
             installed_all = []
             for cfg in configs:
@@ -195,8 +248,37 @@ def main(args: Optional[list] = None) -> int:
 
         installer.print_taskbar_instructions([config])
 
+    elif parsed_args.command == "uninstall":
+        print("=" * 72)
+        print("  KDE AI Launcher - Uninstallation")
+        print("=" * 72)
+
+        if not parsed_args.yes:
+            confirm = input("Remove all generated desktop shortcuts, layout files, and model icons? [y/N]: ").strip().lower()
+            if confirm not in ("y", "yes"):
+                print("Uninstallation cancelled.")
+                return 0
+
+        installer = LauncherInstaller()
+        removed_files = installer.uninstall()
+
+        if removed_files:
+            print("\n[+] Successfully removed the following launcher files:")
+            for p in removed_files:
+                print(f"  - {p}")
+        else:
+            print("\n[i] No existing launcher files were found to remove.")
+
+        print("\nRefreshing KDE Plasma Desktop Cache...")
+        cache_notes = installer.refresh_kde_cache()
+        for note in cache_notes:
+            print(f"  -> {note}")
+
+        print("\n✨ Uninstallation complete! Shortcuts, layout files, and icons removed successfully.")
+
     return 0
 
 
 if __name__ == "__main__":
     sys.exit(main())
+

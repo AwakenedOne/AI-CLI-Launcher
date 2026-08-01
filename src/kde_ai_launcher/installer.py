@@ -9,6 +9,10 @@ from typing import Tuple, List, Optional, Dict
 from .config import LauncherConfig
 from .generator import DesktopEntryGenerator
 
+ASSETS_ICONS_DIR = Path(__file__).resolve().parent.parent.parent / "assets" / "icons"
+if not ASSETS_ICONS_DIR.exists():
+    ASSETS_ICONS_DIR = Path(__file__).resolve().parent / "assets" / "icons"
+
 
 class LauncherInstaller:
     """Installer responsible for writing launcher assets, layout files, and updating KDE system caches."""
@@ -26,6 +30,95 @@ class LauncherInstaller:
         self.apps_dir = (apps_dir or self.DEFAULT_APPS_DIR).expanduser()
         self.konsole_dir = (konsole_dir or self.DEFAULT_KONSOLE_DIR).expanduser()
         self.icons_dir = (icons_dir or self.DEFAULT_ICONS_DIR).expanduser()
+
+    def copy_bundled_icons(self) -> List[Path]:
+        """Copy all bundled SVG icon files from assets/icons/ to the system icon directory."""
+        copied: List[Path] = []
+        if ASSETS_ICONS_DIR.exists():
+            try:
+                self.icons_dir.mkdir(parents=True, exist_ok=True)
+                for svg_file in ASSETS_ICONS_DIR.glob("*.svg"):
+                    target_path = self.icons_dir / svg_file.name
+                    shutil.copy2(svg_file, target_path)
+                    copied.append(target_path)
+            except OSError as e:
+                print(f"[!] Warning: Failed to copy bundled icons: {e}", file=sys.stderr)
+        return copied
+
+    def uninstall(self, configs: Optional[List[LauncherConfig]] = None) -> List[Path]:
+        """Safely remove all installed desktop entries, Konsole layout files, and model icons."""
+        removed_files: List[Path] = []
+
+        target_desktop_files = {"ai-claude.desktop", "ai-antigravity.desktop", "ai-codex.desktop", "ai-launcher.desktop"}
+        target_icon_files = {"claude.svg", "antigravity.svg", "codex.svg", "ai-launcher.svg"}
+        target_model_ids = {"claude", "antigravity", "codex"}
+
+        if configs:
+            for cfg in configs:
+                target_desktop_files.add(cfg.desktop_filename)
+                target_model_ids.add(cfg.model_id)
+
+        # 1. Remove desktop entries
+        if self.apps_dir.exists():
+            for desktop_name in target_desktop_files:
+                desktop_path = self.apps_dir / desktop_name
+                if desktop_path.exists():
+                    try:
+                        desktop_path.unlink()
+                        removed_files.append(desktop_path)
+                    except OSError as e:
+                        print(f"[!] Warning: Could not delete '{desktop_path}': {e}", file=sys.stderr)
+
+            for desktop_path in self.apps_dir.glob("ai-*.desktop"):
+                if desktop_path.exists() and desktop_path not in removed_files:
+                    try:
+                        content = desktop_path.read_text(encoding="utf-8", errors="ignore")
+                        if "Actions=Split4;Tabs4;" in content or "KDE AI Launcher" in content:
+                            desktop_path.unlink()
+                            removed_files.append(desktop_path)
+                    except OSError:
+                        pass
+
+        # 2. Remove Konsole layout files
+        if self.konsole_dir.exists():
+            for model_id in target_model_ids:
+                split_file = self.konsole_dir / f"{model_id}-4split.json"
+                tabs_file = self.konsole_dir / f"{model_id}-4tabs.tabs"
+                for target_file in (split_file, tabs_file):
+                    if target_file.exists() and target_file not in removed_files:
+                        try:
+                            target_file.unlink()
+                            removed_files.append(target_file)
+                        except OSError as e:
+                            print(f"[!] Warning: Could not delete '{target_file}': {e}", file=sys.stderr)
+
+            for split_file in self.konsole_dir.glob("*-4split.json"):
+                if split_file not in removed_files:
+                    try:
+                        split_file.unlink()
+                        removed_files.append(split_file)
+                    except OSError:
+                        pass
+            for tabs_file in self.konsole_dir.glob("*-4tabs.tabs"):
+                if tabs_file not in removed_files:
+                    try:
+                        tabs_file.unlink()
+                        removed_files.append(tabs_file)
+                    except OSError:
+                        pass
+
+        # 3. Remove icon files
+        if self.icons_dir.exists():
+            for icon_name in target_icon_files:
+                icon_path = self.icons_dir / icon_name
+                if icon_path.exists() and icon_path not in removed_files:
+                    try:
+                        icon_path.unlink()
+                        removed_files.append(icon_path)
+                    except OSError as e:
+                        print(f"[!] Warning: Could not delete '{icon_path}': {e}", file=sys.stderr)
+
+        return removed_files
 
     def check_binary_exists(self, binary_command: str) -> bool:
         """Check if the primary binary command executable exists in system PATH."""
@@ -71,20 +164,31 @@ class LauncherInstaller:
             tabs_path.write_text(tabs_content, encoding="utf-8")
             installed_files["tab_layout"] = tabs_path
 
-            # 3. Handle icon file copy if local file path specified
+            # 3. Handle icon file copy if local file path or bundled icon specified
             icon_setting = config.icon
-            if icon_setting and os.path.exists(icon_setting):
-                icon_path = Path(icon_setting).expanduser()
-                if icon_path.is_file():
-                    try:
-                        self.icons_dir.mkdir(parents=True, exist_ok=True)
-                        target_icon_path = self.icons_dir / icon_path.name
-                        shutil.copy2(icon_path, target_icon_path)
-                        installed_files["icon"] = target_icon_path
-                        # Use file path for icon assignment
-                        config.icon = str(target_icon_path)
-                    except OSError as e:
-                        print(f"[!] Warning: Could not copy icon file: {e}", file=sys.stderr)
+            icon_path = None
+            if icon_setting:
+                expanded = Path(icon_setting).expanduser()
+                if expanded.is_file():
+                    icon_path = expanded
+                else:
+                    cand1 = ASSETS_ICONS_DIR / icon_setting
+                    cand2 = ASSETS_ICONS_DIR / f"{icon_setting}.svg"
+                    if cand1.is_file():
+                        icon_path = cand1
+                    elif cand2.is_file():
+                        icon_path = cand2
+
+            if icon_path and icon_path.is_file():
+                try:
+                    self.icons_dir.mkdir(parents=True, exist_ok=True)
+                    target_icon_path = self.icons_dir / icon_path.name
+                    shutil.copy2(icon_path, target_icon_path)
+                    installed_files["icon"] = target_icon_path
+                    # Use file path for icon assignment
+                    config.icon = str(target_icon_path)
+                except OSError as e:
+                    print(f"[!] Warning: Could not copy icon file: {e}", file=sys.stderr)
 
             # 4. Generate & write .desktop entry referencing the layouts in Konsole Desktop Actions
             desktop_file_path = self.apps_dir / config.desktop_filename

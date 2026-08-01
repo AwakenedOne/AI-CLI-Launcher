@@ -107,6 +107,18 @@ Once `kde-ai-launcher install` finishes:
        │ │ Pane 3 (AI) │ Pane 4 (AI)│ │                                    │ └──────────────────────────┘ │
        │ └─────────────┴────────────┘ │                                    └──────────────────────────────┘
        └──────────────────────────────┘
+---
+
+## 🗑️ Uninstalling
+
+To clean up and remove all generated desktop shortcuts, Konsole layouts, icons, and uninstall the package:
+
+```bash
+# Step 1: Remove generated desktop shortcuts, Konsole layouts, and icons
+kde-ai-launcher uninstall
+
+# Step 2: Uninstall the CLI package
+pipx uninstall kde-ai-launcher
 ```
 
 ---
