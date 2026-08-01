@@ -47,8 +47,6 @@ def test_cli_generate_zero_config():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
         apps_dir = tmp_path / "applications"
-        konsole_dir = tmp_path / "konsole"
-        icons_dir = tmp_path / "icons"
 
         with patch("kde_ai_launcher.cli.LauncherInstaller") as MockInstaller:
             mock_inst = MagicMock()
@@ -57,6 +55,22 @@ def test_cli_generate_zero_config():
             MockInstaller.return_value = mock_inst
 
             exit_code = main(["generate"])
+            assert exit_code == 0
+            assert mock_inst.install.call_count == 3
+
+
+def test_cli_install_zero_config():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        apps_dir = tmp_path / "applications"
+
+        with patch("kde_ai_launcher.cli.LauncherInstaller") as MockInstaller:
+            mock_inst = MagicMock()
+            mock_inst.install.return_value = {"desktop": apps_dir / "test.desktop"}
+            mock_inst.refresh_kde_cache.return_value = ["Cache refreshed"]
+            MockInstaller.return_value = mock_inst
+
+            exit_code = main(["install"])
             assert exit_code == 0
             assert mock_inst.install.call_count == 3
 
@@ -122,4 +136,3 @@ def test_cli_uninstall_command():
         exit_code = main(["uninstall", "--yes"])
         assert exit_code == 0
         assert mock_inst.uninstall.call_count == 1
-

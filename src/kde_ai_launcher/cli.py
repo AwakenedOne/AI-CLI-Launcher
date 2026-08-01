@@ -1,6 +1,7 @@
 """CLI entry point for kde-ai-launcher targeting Claude, Antigravity, and Codex."""
 
 import argparse
+import json
 import os
 import shutil
 import sys
@@ -14,6 +15,9 @@ from .installer import LauncherInstaller
 ASSETS_ICONS_DIR = Path(__file__).resolve().parent.parent.parent / "assets" / "icons"
 if not ASSETS_ICONS_DIR.exists():
     ASSETS_ICONS_DIR = Path(__file__).resolve().parent / "assets" / "icons"
+
+DEFAULT_CONFIG_DIR = Path.home() / ".config" / "kde-ai-launcher"
+DEFAULT_CONFIG_FILE = DEFAULT_CONFIG_DIR / "config.json"
 
 
 def get_default_icon_for_model(model_key: str) -> str:
@@ -80,6 +84,35 @@ def get_default_configs() -> List[LauncherConfig]:
             desktop_filename="ai-codex.desktop",
         ),
     ]
+
+
+def save_saved_configs(configs: List[LauncherConfig], file_path: Optional[Path] = None) -> Path:
+    """Save generated launcher configurations to JSON file (default ~/.config/kde-ai-launcher/config.json)."""
+    target_path = (file_path or DEFAULT_CONFIG_FILE).expanduser()
+    try:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        data = [cfg.to_dict() for cfg in configs]
+        target_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    except OSError as e:
+        print(f"[!] Warning: Could not save config file to '{target_path}': {e}", file=sys.stderr)
+    return target_path
+
+
+def load_saved_configs(file_path: Optional[Path] = None) -> List[LauncherConfig]:
+    """Load saved launcher configurations from JSON file or fall back to default configs."""
+    target_path = (file_path or DEFAULT_CONFIG_FILE).expanduser()
+    if target_path.exists():
+        try:
+            content = target_path.read_text(encoding="utf-8")
+            raw_data = json.loads(content)
+            if isinstance(raw_data, list):
+                return [LauncherConfig.from_dict(d) for d in raw_data]
+            elif isinstance(raw_data, dict):
+                return [LauncherConfig.from_dict(raw_data)]
+        except Exception as e:
+            print(f"[!] Warning: Could not read config file '{target_path}': {e}. Using default values.", file=sys.stderr)
+
+    return get_default_configs()
 
 
 def interactive_wizard() -> List[LauncherConfig]:
@@ -194,13 +227,16 @@ def main(args: Optional[list] = None) -> int:
             print_summary(configs, "Generated Configurations Summary")
             should_install = True
 
+        saved_path = save_saved_configs(configs)
+        print(f"\n[+] Saved configuration layout to: {saved_path}")
+
         if parsed_args.out_dir:
             out_dir = Path(parsed_args.out_dir).expanduser()
             out_dir.mkdir(parents=True, exist_ok=True)
             for cfg in configs:
                 out_path = out_dir / f"{cfg.model_id}.json"
                 out_path.write_text(cfg.to_json(), encoding="utf-8")
-                print(f"[+] Saved JSON config to: {out_path.resolve()}")
+                print(f"[+] Exported JSON config to: {out_path.resolve()}")
 
         if should_install:
             installer = LauncherInstaller()
@@ -217,36 +253,43 @@ def main(args: Optional[list] = None) -> int:
             installer.print_taskbar_instructions([cfg for cfg, _ in installed_all])
 
     elif parsed_args.command == "install":
+        configs_to_install: List[LauncherConfig] = []
+
         if parsed_args.config:
             config_path = Path(parsed_args.config).expanduser()
             if not config_path.exists():
                 print(f"[-] Error: Config file '{config_path}' not found.", file=sys.stderr)
                 return 1
-            config = LauncherConfig.from_json(config_path.read_text(encoding="utf-8"))
+            configs_to_install = load_saved_configs(config_path)
         elif parsed_args.model_name and parsed_args.binary_command:
             icon_arg = parsed_args.icon
             if not icon_arg:
                 icon_arg = get_default_icon_for_model(parsed_args.model_name)
 
-            config = LauncherConfig(
-                model_name=parsed_args.model_name,
-                binary_command=parsed_args.binary_command,
-                icon=icon_arg,
-                desktop_filename=parsed_args.desktop_file or "",
-            )
+            configs_to_install = [
+                LauncherConfig(
+                    model_name=parsed_args.model_name,
+                    binary_command=parsed_args.binary_command,
+                    icon=icon_arg,
+                    desktop_filename=parsed_args.desktop_file or "",
+                )
+            ]
         else:
-            print("[-] Error: Specify either --config <file.json> OR both --model-name and --binary-command", file=sys.stderr)
-            return 1
+            # Zero-config install: Load saved config or fall back to defaults
+            configs_to_install = load_saved_configs()
 
         installer = LauncherInstaller()
-        installed_files = installer.install(config, install_konsole_profile=parsed_args.konsole_profile)
+        installed_all = []
+        for cfg in configs_to_install:
+            installed_files = installer.install(cfg, install_konsole_profile=parsed_args.konsole_profile)
+            installed_all.append((cfg, installed_files))
 
         print("\nRefreshing KDE Plasma Desktop Cache...")
         cache_notes = installer.refresh_kde_cache()
         for note in cache_notes:
             print(f"  -> {note}")
 
-        installer.print_taskbar_instructions([config])
+        installer.print_taskbar_instructions([cfg for cfg, _ in installed_all])
 
     elif parsed_args.command == "uninstall":
         print("=" * 72)
@@ -261,6 +304,14 @@ def main(args: Optional[list] = None) -> int:
 
         installer = LauncherInstaller()
         removed_files = installer.uninstall()
+
+        # Also remove saved config file if present
+        if DEFAULT_CONFIG_FILE.exists():
+            try:
+                DEFAULT_CONFIG_FILE.unlink()
+                removed_files.append(DEFAULT_CONFIG_FILE)
+            except OSError:
+                pass
 
         if removed_files:
             print("\n[+] Successfully removed the following launcher files:")
@@ -281,4 +332,3 @@ def main(args: Optional[list] = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

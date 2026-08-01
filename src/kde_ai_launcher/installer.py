@@ -137,12 +137,7 @@ class LauncherInstaller:
         config: LauncherConfig,
         install_konsole_profile: bool = False,
     ) -> Dict[str, Path]:
-        """Write the .desktop entry, split grid layout, tab layout, and optional Konsole profile to disk safely.
-
-        Returns:
-            Dict[str, Path]: Mapping of file types ('desktop', 'split_layout', 'tab_layout', 'profile', 'icon') to installed file paths.
-        """
-        # 0. Check binary warning
+        """Write the .desktop entry, split grid layout, tab layout, and optional Konsole profile to disk safely."""
         if not self.check_binary_exists(config.binary_command):
             first_word = config.binary_command.split()[0] if config.binary_command else ""
             print(f"[!] Warning: Command '{first_word}' was not found in system PATH. File creation will continue.", file=sys.stderr)
@@ -191,14 +186,13 @@ class LauncherInstaller:
                     shutil.copy2(icon_path, target_icon_path)
                     os.chmod(target_icon_path, 0o644)
                     installed_files["icon"] = target_icon_path
-                    # Use absolute path for icon assignment
                     config.icon = str(target_icon_path.resolve())
                 except OSError as e:
                     print(f"[!] Warning: Could not copy icon file: {e}", file=sys.stderr)
             elif not ASSETS_ICONS_DIR.exists():
                 print(f"[!] Warning: Bundled icon assets directory '{ASSETS_ICONS_DIR}' not found.", file=sys.stderr)
 
-            # 4. Generate & write .desktop entry referencing the layouts in Konsole Desktop Actions and absolute icon path
+            # 4. Generate & write .desktop entry referencing the layouts in Konsole Desktop Actions
             desktop_file_path = self.apps_dir / config.desktop_filename
             desktop_content = DesktopEntryGenerator.generate_desktop_entry(
                 config,
@@ -225,10 +219,10 @@ class LauncherInstaller:
 
     @staticmethod
     def refresh_kde_cache() -> List[str]:
-        """Execute KDE Plasma / XDG cache update tools with robust error handling."""
+        """Execute KDE Plasma / XDG cache update tools, prioritizing kbuildsycoca6 over kbuildsycoca5."""
         results = []
 
-        # 1. kbuildsycoca6 (KDE Plasma 6)
+        # 1. kbuildsycoca6 (KDE Plasma 6 - Primary)
         if shutil.which("kbuildsycoca6"):
             try:
                 res = subprocess.run(["kbuildsycoca6", "--noincremental"], capture_output=True, text=True, timeout=10)
@@ -240,6 +234,7 @@ class LauncherInstaller:
                 results.append("kbuildsycoca6 command timed out after 10 seconds.")
             except Exception as e:
                 results.append(f"Failed to execute kbuildsycoca6: {e}")
+        # 2. kbuildsycoca5 (KDE Plasma 5 - Fallback)
         elif shutil.which("kbuildsycoca5"):
             try:
                 res = subprocess.run(["kbuildsycoca5", "--noincremental"], capture_output=True, text=True, timeout=10)
@@ -252,7 +247,7 @@ class LauncherInstaller:
             except Exception as e:
                 results.append(f"Failed to execute kbuildsycoca5: {e}")
 
-        # 2. update-desktop-database (Standard XDG)
+        # 3. update-desktop-database (Standard XDG)
         if shutil.which("update-desktop-database"):
             apps_dir = str(LauncherInstaller.DEFAULT_APPS_DIR)
             try:
@@ -275,7 +270,7 @@ class LauncherInstaller:
         print("\n" + "=" * 72)
         print("  🎉 INSTALLATION COMPLETE! HOW TO ADD TO YOUR KDE PLASMA TASKBAR PANEL")
         print("=" * 72)
-        print("\nYour AI launchers are now installed and indexed in KDE Plasma 6:")
+        print("\nYour AI launchers are now installed and indexed in KDE Plasma:")
         for cfg in configs:
             print(f"  • {cfg.model_name} ({cfg.desktop_filename})")
 
